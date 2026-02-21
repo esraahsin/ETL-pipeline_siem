@@ -1,0 +1,129 @@
+{
+  "index_patterns": ["siem-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.lifecycle.name": "siem-ilm-policy",
+      "index.lifecycle.rollover_alias": "siem"
+    },
+    "mappings": {
+      "dynamic": "true",
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "ingest_timestamp": { "type": "date" },
+        "source_type": { "type": "keyword" },
+        "tags": { "type": "keyword" },
+        "_id": { "type": "keyword" },
+        "event": {
+          "properties": {
+            "kind": { "type": "keyword" },
+            "category": { "type": "keyword" },
+            "type": { "type": "keyword" },
+            "action": { "type": "keyword" },
+            "dataset": { "type": "keyword" },
+            "severity": { "type": "integer" },
+            "outcome": { "type": "keyword" },
+            "original": { "type": "text", "index": false }
+          }
+        },
+        "source": {
+          "properties": {
+            "ip": { "type": "ip" },
+            "port": { "type": "integer" },
+            "geo": {
+              "properties": {
+                "country_iso_code": { "type": "keyword" },
+                "country_name": { "type": "keyword" },
+                "city_name": { "type": "keyword" },
+                "location": { "type": "geo_point" }
+              }
+            }
+          }
+        },
+        "destination": {
+          "properties": {
+            "ip": { "type": "ip" },
+            "port": { "type": "integer" },
+            "geo": {
+              "properties": {
+                "country_iso_code": { "type": "keyword" },
+                "country_name": { "type": "keyword" },
+                "city_name": { "type": "keyword" },
+                "location": { "type": "geo_point" }
+              }
+            }
+          }
+        },
+        "network": {
+          "properties": {
+            "transport": { "type": "keyword" }
+          }
+        },
+        "http": {
+          "properties": {
+            "request": {
+              "properties": {
+                "method": { "type": "keyword" },
+                "referrer": { "type": "keyword" }
+              }
+            },
+            "response": {
+              "properties": {
+                "status_code": { "type": "integer" },
+                "bytes": { "type": "long" }
+              }
+            },
+            "version": { "type": "keyword" }
+          }
+        },
+        "url": {
+          "properties": {
+            "path": { "type": "keyword" },
+            "original": { "type": "keyword" }
+          }
+        },
+        "user": {
+          "properties": {
+            "name": { "type": "keyword" },
+            "domain": { "type": "keyword" }
+          }
+        },
+        "host": {
+          "properties": {
+            "hostname": { "type": "keyword" },
+            "domain": { "type": "keyword" }
+          }
+        },
+        "observer": {
+          "properties": {
+            "vendor": { "type": "keyword" },
+            "product": { "type": "keyword" },
+            "type": { "type": "keyword" }
+          }
+        },
+        "rule": {
+          "properties": {
+            "id": { "type": "keyword" },
+            "name": { "type": "keyword" },
+            "category": { "type": "keyword" }
+          }
+        },
+        "winlog": {
+          "properties": {
+            "event_id": { "type": "integer" },
+            "channel": { "type": "keyword" },
+            "logon": {
+              "properties": {
+                "type": { "type": "keyword" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "_meta": {
+    "description": "SIEM ECS log index template — SIEM ETL Pipeline"
+  }
+}
