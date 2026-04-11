@@ -9,7 +9,7 @@ kafka-python==2.0.2
 pyspark==3.5.0
 
 # --- Apache Airflow ---
-apache-airflow==3.1.6
+#apache-airflow==3.1.6
 
 # --- Elasticsearch ---
 elasticsearch==8.11.0
@@ -25,7 +25,7 @@ structlog==23.2.0
 great-expectations==0.18.8
 
 # --- HTTP / utilities ---
-requests==2.31.0
+requests>=2.32.0
 python-dotenv==1.0.0
 tenacity==8.2.3
 faker==20.1.0

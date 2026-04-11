@@ -14,7 +14,6 @@
         "ingest_timestamp": { "type": "date" },
         "source_type": { "type": "keyword" },
         "tags": { "type": "keyword" },
-        "_id": { "type": "keyword" },
         "event": {
           "properties": {
             "kind": { "type": "keyword" },
