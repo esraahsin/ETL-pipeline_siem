@@ -1,9 +1,8 @@
-version: '3.8'
-
 services:
   # === KAFKA ===
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
+    container_name: siem-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
     ports:
@@ -11,6 +10,7 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
+    container_name: siem-kafka
     depends_on:
       - zookeeper
     ports:
@@ -25,6 +25,7 @@ services:
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
+    container_name: siem-kafka-ui
     depends_on:
       - kafka
     ports:
@@ -36,6 +37,7 @@ services:
   # === ELASTICSEARCH + KIBANA ===
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: siem-elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -47,6 +49,7 @@ services:
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: siem-kibana
     depends_on:
       - elasticsearch
     ports:
@@ -57,6 +60,7 @@ services:
   # === MINIO (DATA LAKE) ===
   minio:
     image: minio/minio:latest
+    container_name: siem-minio
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -70,6 +74,7 @@ services:
   # === AIRFLOW ===
   postgres:
     image: postgres:15
+    container_name: siem-postgres
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
@@ -79,6 +84,7 @@ services:
 
   airflow-init:
     image: apache/airflow:2.8.0
+    container_name: siem-airflow-init
     depends_on:
       - postgres
     environment:
@@ -92,6 +98,7 @@ services:
 
   airflow-webserver:
     image: apache/airflow:2.8.0
+    container_name: siem-airflow-webserver
     depends_on:
       - postgres
       - airflow-init
@@ -107,6 +114,7 @@ services:
 
   airflow-scheduler:
     image: apache/airflow:2.8.0
+    container_name: siem-airflow-scheduler
     depends_on:
       - postgres
       - airflow-init
@@ -119,26 +127,37 @@ services:
     command: airflow scheduler
 
   # === SPARK ===
+  # === SPARK ===
   spark-master:
-    image: bitnami/spark:3.5
+    image: apache/spark:3.5.1
+    container_name: siem-spark-master
     ports:
       - "7077:7077"
       - "8082:8080"
     environment:
-      - SPARK_MODE=master
+      - SPARK_NO_DAEMONIZE=true
+    command: >
+      /bin/bash -c "/opt/spark/sbin/start-master.sh &&
+      tail -f /opt/spark/logs/*"
+    user: root
 
   spark-worker:
-    image: bitnami/spark:3.5
+    image: apache/spark:3.5.1
+    container_name: siem-spark-worker
     depends_on:
       - spark-master
     environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=2G
+      - SPARK_NO_DAEMONIZE=true
+    command: >
+      /bin/bash -c "/opt/spark/sbin/start-worker.sh spark://spark-master:7077 &&
+      tail -f /opt/spark/logs/*"
+    user: root
 
+  
   # === GRAFANA ===
   grafana:
     image: grafana/grafana:latest
+    container_name: siem-grafana
     ports:
       - "3000:3000"
     environment:
