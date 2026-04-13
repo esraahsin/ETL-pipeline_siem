@@ -108,6 +108,13 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      ELASTICSEARCH_HOST: elasticsearch        # ← ADD
+      ELASTICSEARCH_PORT: "9200"               # ← ADD
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092     # ← ADD
+      MINIO_ENDPOINT: minio:9000              # ← ADD
+      MINIO_ACCESS_KEY: minioadmin            # ← ADD
+      MINIO_SECRET_KEY: minioadmin            # ← ADD
+      MINIO_BUCKET_RAW: siem-raw-logs         # ← ADD
     volumes:
       - ../dags:/opt/airflow/dags
     command: airflow webserver
@@ -122,11 +129,16 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      ELASTICSEARCH_HOST: elasticsearch        # ← ADD
+      ELASTICSEARCH_PORT: "9200"               # ← ADD
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092     # ← ADD
+      MINIO_ENDPOINT: minio:9000              # ← ADD
+      MINIO_ACCESS_KEY: minioadmin            # ← ADD
+      MINIO_SECRET_KEY: minioadmin            # ← ADD
+      MINIO_BUCKET_RAW: siem-raw-logs         # ← ADD
     volumes:
       - ../dags:/opt/airflow/dags
     command: airflow scheduler
-
-  # === SPARK ===
   # === SPARK ===
   spark-master:
     image: apache/spark:3.5.1

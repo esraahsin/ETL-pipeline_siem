@@ -72,20 +72,49 @@ def create_spark_session() -> SparkSession:
         .getOrCreate()
     )
 
-
 def write_to_es(batch_df, batch_id):
+    import boto3
+    from botocore.client import Config
+
     es = Elasticsearch(f"http://{ES_HOST}:{ES_PORT}")
+
+    s3 = boto3.client(
+        "s3",
+        endpoint_url="http://minio:9000",
+        aws_access_key_id="minioadmin",
+        aws_secret_access_key="minioadmin",
+        config=Config(signature_version="s3v4"),
+        region_name="us-east-1",
+    )
+
+    # Create buckets if they don't exist
+    for bucket in ["siem-raw-logs", "siem-processed-logs"]:
+        try:
+            s3.head_bucket(Bucket=bucket)
+        except Exception:
+            s3.create_bucket(Bucket=bucket)
+
     rows = batch_df.collect()
     for row in rows:
         try:
             doc = _json.loads(row["ecs_event"])
+
+            # 1. Write to Elasticsearch
             index = f"siem-{doc.get('source_type', 'unknown')}"
             doc_id = doc.pop("_id", None)
             es.index(index=index, id=doc_id, document=doc)
+
+            # 2. Write to MinIO
+            source_type = doc.get("source_type", "unknown")
+            date_str = doc.get("@timestamp", "")[:10]
+            key = f"{source_type}/{date_str}/{doc_id}.json"
+            s3.put_object(
+                Bucket="siem-raw-logs",
+                Key=key,
+                Body=_json.dumps(doc).encode("utf-8"),
+            )
         except Exception as e:
-            print(f"[ES write error] {e}")
-
-
+            print(f"[write error] {e}")
 def run():
     spark = create_spark_session()
     spark.sparkContext.setLogLevel("WARN")
