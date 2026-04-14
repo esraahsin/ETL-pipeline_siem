@@ -143,18 +143,22 @@ services:
   spark-master:
     image: apache/spark:3.5.1
     container_name: siem-spark-master
-    ports:
-      - "7077:7077"
-      - "8082:8080"
     environment:
       - SPARK_NO_DAEMONIZE=true
-      - PYTHONPATH=/opt/spark
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
-      - ELASTICSEARCH_HOST=elasticsearch
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092        # ← already there
+      - ELASTICSEARCH_HOST=elasticsearch            # ← already there
+      - ELASTICSEARCH_PORT=9200
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET_RAW=siem-raw-logs
+      - MINIO_BUCKET_PROCESSED=siem-processed-logs
     volumes:
-      - ../spark_jobs:/opt/spark/spark_jobs   # ← ADD
+      - ../spark_jobs:/opt/spark/spark_jobs
+      - ../spark_jobs.zip:/opt/spark/spark_jobs.zip   # ← ADD
+      - ../spark_jobs/streaming_job.py:/opt/spark/streaming_job.py  # ← ADD
     command: >
-      /bin/bash -c "pip install boto3 elasticsearch &&
+      /bin/bash -c "pip install boto3 elasticsearch==8.11.0 structlog &&
       /opt/spark/sbin/start-master.sh &&
       tail -f /opt/spark/logs/*"
     user: root
@@ -166,10 +170,11 @@ services:
       - spark-master
     environment:
       - SPARK_NO_DAEMONIZE=true
+
     volumes:
       - ../spark_jobs:/opt/spark/spark_jobs   # ← ADD
     command: >
-      /bin/bash -c "pip install boto3 elasticsearch &&
+      /bin/bash -c "pip install boto3 elasticsearch==8.11.0 structlog &&
       /opt/spark/sbin/start-worker.sh spark://spark-master:7077 &&
       tail -f /opt/spark/logs/*"
     user: root
