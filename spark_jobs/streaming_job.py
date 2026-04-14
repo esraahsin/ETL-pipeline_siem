@@ -1,5 +1,6 @@
-"""Spark Structured Streaming job — reads from Kafka topics, applies T1-T4
-transformations, and writes results to Elasticsearch.
+"""
+Spark Structured Streaming job — reads from Kafka topics, applies T1-T4
+transformations, and writes results to Elasticsearch + MinIO.
 """
 
 import json
@@ -22,39 +23,48 @@ from spark_jobs.quality.deduplicator import compute_event_hash
 
 log = structlog.get_logger(component="streaming_job")
 
+# ✅ FIX: revert to old working Kafka config
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+
 ES_HOST = os.getenv("ELASTICSEARCH_HOST", "localhost")
 ES_PORT = os.getenv("ELASTICSEARCH_PORT", "9200")
 
 TOPICS = ["firewall-logs", "web-logs", "windows-logs", "ids-logs"]
 
 
+# ============================
+# Parsing + Enrichment
+# ============================
 def _parse_and_enrich(raw: str, source_type: str) -> str:
     import json as _json
-    # Si raw est encore une string JSON imbriquée, la parser d'abord
+
     try:
         raw_data = _json.loads(raw) if isinstance(raw, str) else raw
-        # Pour windows et ids, le raw lui-même peut être un dict sérialisé
         if source_type in ("windows", "ids") and isinstance(raw_data, dict):
-            raw = raw_data  # passer le dict directement
+            raw = raw_data
     except Exception:
         pass
+
     parsers = {
         "firewall": parse_firewall_log,
         "webserver": parse_webserver_log,
         "windows": parse_windows_log,
         "ids": parse_ids_log,
     }
+
     parser = parsers.get(source_type)
     if parser is None:
         return None
+
     try:
         event = parser(raw)
         if event is None:
             return None
+
         event = enrich_with_geoip(event)
         event = enrich_with_severity(event)
         event["_id"] = compute_event_hash(event)
+
         return json.dumps(event)
     except Exception:
         return None
@@ -70,6 +80,9 @@ _MESSAGE_SCHEMA = StructType([
 ])
 
 
+# ============================
+# Spark Session
+# ============================
 def create_spark_session() -> SparkSession:
     return (
         SparkSession.builder
@@ -81,6 +94,10 @@ def create_spark_session() -> SparkSession:
         .getOrCreate()
     )
 
+
+# ============================
+# Write to ES + MinIO
+# ============================
 def write_to_es(batch_df, batch_id):
     import boto3
     from botocore.client import Config
@@ -104,26 +121,51 @@ def write_to_es(batch_df, batch_id):
             s3.create_bucket(Bucket=bucket)
 
     rows = batch_df.collect()
+
     for row in rows:
         try:
             doc = _json.loads(row["ecs_event"])
 
-            # 1. Write to Elasticsearch
+            # Raw original log
+            raw_original = doc.get("event", {}).get("original", row.get("raw", ""))
+
+            # 1️⃣ Write to Elasticsearch
             index = f"siem-{doc.get('source_type', 'unknown')}"
             doc_id = doc.pop("_id", None)
+
             es.index(index=index, id=doc_id, document=doc)
 
-            # 2. Write to MinIO
+            # 2️⃣ Write RAW log to MinIO
             source_type = doc.get("source_type", "unknown")
             date_str = doc.get("@timestamp", "")[:10]
-            key = f"{source_type}/{date_str}/{doc_id}.json"
+
+            raw_key = f"{source_type}/{date_str}/{doc_id}.json"
+
             s3.put_object(
                 Bucket="siem-raw-logs",
-                Key=key,
+                Key=raw_key,
+                Body=_json.dumps({
+                    "raw": raw_original,
+                    "source_type": source_type
+                }).encode("utf-8"),
+            )
+
+            # 3️⃣ Write PROCESSED log to MinIO (NEW)
+            processed_key = f"processed/{source_type}/{date_str}/{doc_id}.json"
+
+            s3.put_object(
+                Bucket="siem-processed-logs",
+                Key=processed_key,
                 Body=_json.dumps(doc).encode("utf-8"),
             )
+
         except Exception as e:
             print(f"[write error] {e}")
+
+
+# ============================
+# Main Streaming Job
+# ============================
 def run():
     spark = create_spark_session()
     spark.sparkContext.setLogLevel("WARN")
@@ -148,7 +190,7 @@ def run():
         parse_udf(col("raw"), col("source_type")),
     ).filter(col("ecs_event").isNotNull())
 
-    es_query = (
+    query = (
         enriched_df.writeStream
         .foreachBatch(write_to_es)
         .option("checkpointLocation", "/tmp/siem-es-checkpoint")
@@ -157,6 +199,7 @@ def run():
     )
 
     log.info("streaming_job_started", topics=TOPICS)
+
     spark.streams.awaitAnyTermination()
 
 
