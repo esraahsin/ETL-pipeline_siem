@@ -148,8 +148,14 @@ services:
       - "8082:8080"
     environment:
       - SPARK_NO_DAEMONIZE=true
+      - PYTHONPATH=/opt/spark
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - ELASTICSEARCH_HOST=elasticsearch
+    volumes:
+      - ../spark_jobs:/opt/spark/spark_jobs   # ← ADD
     command: >
-      /bin/bash -c "/opt/spark/sbin/start-master.sh &&
+      /bin/bash -c "pip install boto3 elasticsearch &&
+      /opt/spark/sbin/start-master.sh &&
       tail -f /opt/spark/logs/*"
     user: root
 
@@ -160,8 +166,11 @@ services:
       - spark-master
     environment:
       - SPARK_NO_DAEMONIZE=true
+    volumes:
+      - ../spark_jobs:/opt/spark/spark_jobs   # ← ADD
     command: >
-      /bin/bash -c "/opt/spark/sbin/start-worker.sh spark://spark-master:7077 &&
+      /bin/bash -c "pip install boto3 elasticsearch &&
+      /opt/spark/sbin/start-worker.sh spark://spark-master:7077 &&
       tail -f /opt/spark/logs/*"
     user: root
 

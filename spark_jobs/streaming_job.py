@@ -30,6 +30,15 @@ TOPICS = ["firewall-logs", "web-logs", "windows-logs", "ids-logs"]
 
 
 def _parse_and_enrich(raw: str, source_type: str) -> str:
+    import json as _json
+    # Si raw est encore une string JSON imbriquée, la parser d'abord
+    try:
+        raw_data = _json.loads(raw) if isinstance(raw, str) else raw
+        # Pour windows et ids, le raw lui-même peut être un dict sérialisé
+        if source_type in ("windows", "ids") and isinstance(raw_data, dict):
+            raw = raw_data  # passer le dict directement
+    except Exception:
+        pass
     parsers = {
         "firewall": parse_firewall_log,
         "webserver": parse_webserver_log,
