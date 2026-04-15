@@ -94,7 +94,14 @@ services:
       _AIRFLOW_WWW_USER_CREATE: 'true'
       _AIRFLOW_WWW_USER_USERNAME: airflow
       _AIRFLOW_WWW_USER_PASSWORD: airflow
-    entrypoint: /bin/bash -c "airflow db migrate && airflow users create --username airflow --password airflow --firstname Admin --lastname User --role Admin --email admin@example.com || true"
+      # Install SIEM pipeline dependencies inside Airflow
+      _PIP_ADDITIONAL_REQUIREMENTS: >-
+        kafka-python==2.0.2
+        minio==7.2.0
+        elasticsearch==8.11.0
+        requests>=2.32.0
+        boto3==1.34.0
+    entrypoint: /bin/bash -c "pip install kafka-python==2.0.2 minio==7.2.0 elasticsearch==8.11.0 requests boto3==1.34.0 --quiet && airflow db migrate && airflow users create --username airflow --password airflow --firstname Admin --lastname User --role Admin --email admin@example.com || true"
 
   airflow-webserver:
     image: apache/airflow:2.8.0
@@ -108,16 +115,26 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      ELASTICSEARCH_HOST: elasticsearch        # ← ADD
-      ELASTICSEARCH_PORT: "9200"               # ← ADD
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092     # ← ADD
-      MINIO_ENDPOINT: minio:9000              # ← ADD
-      MINIO_ACCESS_KEY: minioadmin            # ← ADD
-      MINIO_SECRET_KEY: minioadmin            # ← ADD
-      MINIO_BUCKET_RAW: siem-raw-logs         # ← ADD
+      # SIEM service addresses
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: "9200"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET_RAW: siem-raw-logs
+      MINIO_BUCKET_PROCESSED: siem-processed-logs
+      # Auto-install missing packages on startup
+      _PIP_ADDITIONAL_REQUIREMENTS: >-
+        kafka-python==2.0.2
+        minio==7.2.0
+        elasticsearch==8.11.0
+        requests>=2.32.0
+        boto3==1.34.0
     volumes:
       - ../dags:/opt/airflow/dags
     command: airflow webserver
+    restart: unless-stopped
 
   airflow-scheduler:
     image: apache/airflow:2.8.0
@@ -129,24 +146,35 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      ELASTICSEARCH_HOST: elasticsearch        # ← ADD
-      ELASTICSEARCH_PORT: "9200"               # ← ADD
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092     # ← ADD
-      MINIO_ENDPOINT: minio:9000              # ← ADD
-      MINIO_ACCESS_KEY: minioadmin            # ← ADD
-      MINIO_SECRET_KEY: minioadmin            # ← ADD
-      MINIO_BUCKET_RAW: siem-raw-logs         # ← ADD
+      # SIEM service addresses
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: "9200"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET_RAW: siem-raw-logs
+      MINIO_BUCKET_PROCESSED: siem-processed-logs
+      # Auto-install missing packages on startup
+      _PIP_ADDITIONAL_REQUIREMENTS: >-
+        kafka-python==2.0.2
+        minio==7.2.0
+        elasticsearch==8.11.0
+        requests>=2.32.0
+        boto3==1.34.0
     volumes:
       - ../dags:/opt/airflow/dags
     command: airflow scheduler
+    restart: unless-stopped
+
   # === SPARK ===
   spark-master:
     image: apache/spark:3.5.1
     container_name: siem-spark-master
     environment:
       - SPARK_NO_DAEMONIZE=true
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092        # ← already there
-      - ELASTICSEARCH_HOST=elasticsearch            # ← already there
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - ELASTICSEARCH_HOST=elasticsearch
       - ELASTICSEARCH_PORT=9200
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=minioadmin
@@ -155,8 +183,8 @@ services:
       - MINIO_BUCKET_PROCESSED=siem-processed-logs
     volumes:
       - ../spark_jobs:/opt/spark/spark_jobs
-      - ../spark_jobs.zip:/opt/spark/spark_jobs.zip   # ← ADD
-      - ../spark_jobs/streaming_job.py:/opt/spark/streaming_job.py  # ← ADD
+      - ../spark_jobs.zip:/opt/spark/spark_jobs.zip
+      - ../spark_jobs/streaming_job.py:/opt/spark/streaming_job.py
     command: >
       /bin/bash -c "pip install boto3 elasticsearch==8.11.0 structlog &&
       /opt/spark/sbin/start-master.sh &&
@@ -170,16 +198,19 @@ services:
       - spark-master
     environment:
       - SPARK_NO_DAEMONIZE=true
-
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET_RAW=siem-raw-logs
+      - MINIO_BUCKET_PROCESSED=siem-processed-logs
     volumes:
-      - ../spark_jobs:/opt/spark/spark_jobs   # ← ADD
+      - ../spark_jobs:/opt/spark/spark_jobs
     command: >
       /bin/bash -c "pip install boto3 elasticsearch==8.11.0 structlog &&
       /opt/spark/sbin/start-worker.sh spark://spark-master:7077 &&
       tail -f /opt/spark/logs/*"
     user: root
 
-  
   # === GRAFANA ===
   grafana:
     image: grafana/grafana:latest
