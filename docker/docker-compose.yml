@@ -123,6 +123,7 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET_RAW: siem-raw-logs
+      AIRFLOW__WEBSERVER__SECRET_KEY: my_super_secret_key
       MINIO_BUCKET_PROCESSED: siem-processed-logs
       # Auto-install missing packages on startup
       _PIP_ADDITIONAL_REQUIREMENTS: >-
@@ -154,6 +155,7 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET_RAW: siem-raw-logs
+      AIRFLOW__WEBSERVER__SECRET_KEY: my_super_secret_key
       MINIO_BUCKET_PROCESSED: siem-processed-logs
       # Auto-install missing packages on startup
       _PIP_ADDITIONAL_REQUIREMENTS: >-
@@ -187,6 +189,7 @@ services:
       - ../spark_jobs:/opt/spark/spark_jobs
       - ../spark_jobs.zip:/opt/spark/spark_jobs.zip
       - ../spark_jobs/streaming_job.py:/opt/spark/streaming_job.py
+      - ../geoip:/opt/geoip 
     command: >
       /bin/bash -c "pip install boto3 elasticsearch==8.11.0 structlog &&
       /opt/spark/sbin/start-master.sh &&
@@ -207,6 +210,7 @@ services:
       - MINIO_BUCKET_PROCESSED=siem-processed-logs
     volumes:
       - ../spark_jobs:/opt/spark/spark_jobs
+      - ../geoip:/opt/geoip 
     command: >
       /bin/bash -c "pip install boto3 elasticsearch==8.11.0 structlog &&
       /opt/spark/sbin/start-worker.sh spark://spark-master:7077 &&
