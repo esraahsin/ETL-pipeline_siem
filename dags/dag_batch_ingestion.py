@@ -43,7 +43,7 @@ def _ingest_source(source_type: str, **context):
 
     execution_date = context["execution_date"].strftime("%Y-%m-%d")
     bucket = os.getenv("MINIO_BUCKET_RAW", "siem-raw-logs")
-    kafka_bs = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+    kafka_bs = os.getenv("KAFKA_BOOTSTRAP_SERVERS") or "kafka:29092"
     minio_endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9000")
     access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
     secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")

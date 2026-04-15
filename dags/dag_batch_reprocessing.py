@@ -28,12 +28,15 @@ dag = DAG(
     tags=["siem", "reprocessing"],
 )
 
+from airflow.operators.bash import BashOperator
+
 reprocess = BashOperator(
     task_id="spark_batch_reprocess",
     bash_command=(
-        "spark-submit "
-        "--master {{ var.value.get('SPARK_MASTER', 'local[*]') }} "
-        "/opt/siem/spark_jobs/batch_job.py "
+        "docker exec siem-spark-master "
+        "/opt/spark/bin/spark-submit "
+        "--master local[*] "
+        "/opt/spark/spark_jobs/batch_job.py "
         "{{ (execution_date - macros.timedelta(days=1)).strftime('%Y-%m-%d') }}"
     ),
     dag=dag,

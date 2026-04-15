@@ -8,6 +8,10 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+import os
+import boto3
+from botocore.client import Config
+from datetime import timezone
 
 default_args = {
     "owner": "siem-team",
@@ -62,30 +66,28 @@ def _cleanup_elasticsearch(**context):
 
     print(f"Deleted {len(deleted)} expired ES indices: {deleted}")
 
-
 def _cleanup_minio(**context):
-    """Delete MinIO raw log objects older than MINIO_RETENTION_DAYS."""
-    import os
-    from datetime import timezone
-
-    from minio import Minio
-
+   
     cutoff = context["execution_date"].replace(tzinfo=timezone.utc) - timedelta(days=MINIO_RETENTION_DAYS)
-    client = Minio(
-        os.getenv("MINIO_ENDPOINT", "localhost:9000"),
-        access_key=os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
-        secret_key=os.getenv("MINIO_SECRET_KEY", "minioadmin"),
-        secure=False,
+    
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=f"http://{os.getenv('MINIO_ENDPOINT', 'minio:9000')}",
+        aws_access_key_id=os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
+        aws_secret_access_key=os.getenv("MINIO_SECRET_KEY", "minioadmin"),
+        config=Config(signature_version="s3v4"),
+        region_name="us-east-1",
     )
     bucket = os.getenv("MINIO_BUCKET_RAW", "siem-raw-logs")
-    objects = client.list_objects(bucket, recursive=True)
+    
+    paginator = s3.get_paginator("list_objects_v2")
     deleted = 0
-    for obj in objects:
-        if obj.last_modified and obj.last_modified < cutoff:
-            client.remove_object(bucket, obj.object_name)
-            deleted += 1
+    for page in paginator.paginate(Bucket=bucket):
+        for obj in page.get("Contents", []):
+            if obj["LastModified"].replace(tzinfo=timezone.utc) < cutoff:
+                s3.delete_object(Bucket=bucket, Key=obj["Key"])
+                deleted += 1
     print(f"Deleted {deleted} expired MinIO objects.")
-
 
 cleanup_es = PythonOperator(
     task_id="cleanup_elasticsearch_indices",
