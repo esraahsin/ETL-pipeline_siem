@@ -33,18 +33,19 @@ dag = DAG(
 
 
 def _ingest_source(source_type: str, **context):
-    """Re-publish JSONL raw logs for *source_type* back to the Kafka topic."""
     import json
     import os
+    from datetime import timezone as _tz
 
     import boto3
     from botocore.client import Config
     from kafka import KafkaProducer
 
+    today = datetime.now(_tz.utc).strftime("%Y-%m-%d")
     execution_date = context["execution_date"].strftime("%Y-%m-%d")
     bucket = os.getenv("MINIO_BUCKET_RAW", "siem-raw-logs")
     kafka_bs = os.getenv("KAFKA_BOOTSTRAP_SERVERS") or "kafka:29092"
-    minio_endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+    minio_endpoint = os.getenv("MINIO_ENDPOINT", "minio:9000")
     access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
     secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
 
@@ -54,6 +55,7 @@ def _ingest_source(source_type: str, **context):
         "windows": "windows-logs",
         "ids": "ids-logs",
     }
+    topic = topic_map[source_type]
 
     s3 = boto3.client(
         "s3",
@@ -63,44 +65,42 @@ def _ingest_source(source_type: str, **context):
         config=Config(signature_version="s3v4"),
         region_name="us-east-1",
     )
-
     producer = KafkaProducer(
         bootstrap_servers=kafka_bs,
         value_serializer=lambda v: json.dumps(v).encode("utf-8"),
         retries=3,
     )
 
-    prefix = f"{source_type}/{execution_date}/"
-    topic = topic_map[source_type]
     count = 0
+    dates_to_check = set([execution_date, today])
 
     try:
-        paginator = s3.get_paginator("list_objects_v2")
-        pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
+        for date_str in dates_to_check:
+            prefix = f"{source_type}/{date_str}/"
+            paginator = s3.get_paginator("list_objects_v2")
+            pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
 
-        for page in pages:
-            for obj in page.get("Contents", []):
-                key = obj["Key"]
-                if not key.endswith(".jsonl"):
-                    continue
-                body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
-                for line in body.decode("utf-8").splitlines():
-                    line = line.strip()
-                    if not line:
+            for page in pages:
+                for obj in page.get("Contents", []):
+                    key = obj["Key"]
+                    if not key.endswith(".jsonl"):
                         continue
-                    try:
-                        record = json.loads(line)
-                        producer.send(topic, value=record)
-                        count += 1
-                    except json.JSONDecodeError as e:
-                        print(f"[{source_type}] Skipping invalid JSON line: {e}")
-
+                    body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+                    for line in body.decode("utf-8").splitlines():
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            record = json.loads(line)
+                            producer.send(topic, value=record)
+                            count += 1
+                        except json.JSONDecodeError as e:
+                            print(f"[{source_type}] Skipping invalid JSON: {e}")
         producer.flush()
     finally:
         producer.close()
 
-    print(f"[{source_type}] Re-ingested {count} records for {execution_date} → {topic}")
-
+    print(f"[{source_type}] Re-ingested {count} records → {topic}")
 
 for _source in ("firewall", "webserver", "windows", "ids"):
     PythonOperator(
