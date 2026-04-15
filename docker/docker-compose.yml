@@ -134,6 +134,8 @@ services:
         boto3==1.34.0
     volumes:
       - ../dags:/opt/airflow/dags
+      - ../spark_jobs:/opt/airflow/spark_jobs  # ← ADD THIS
+
     command: airflow webserver
     restart: unless-stopped
 
@@ -168,6 +170,7 @@ services:
     volumes:
       - ../dags:/opt/airflow/dags
       - /var/run/docker.sock:/var/run/docker.sock  
+      - ../spark_jobs:/opt/airflow/spark_jobs  # ← ADD THIS
     command: airflow scheduler
     restart: unless-stopped
 
