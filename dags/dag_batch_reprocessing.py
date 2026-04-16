@@ -25,6 +25,8 @@ dag = DAG(
 
 def _reprocess(**context):
     import os, json, boto3
+    from datetime import timedelta        
+
     from botocore.client import Config
     from elasticsearch import Elasticsearch
 
@@ -78,7 +80,12 @@ def _reprocess(**context):
                     try:
                         record = json.loads(line)
                         raw = record.get("raw", "")
-                        event = parser(raw) if isinstance(raw, str) else parser(raw)
+                        if isinstance(raw, dict):
+                            import json as _json_inner
+                            raw_input = _json_inner.dumps(raw)
+                        else:
+                            raw_input = raw
+                        event = parser(raw_input)
                         if event is None:
                             continue
                         event = enrich_with_geoip(event)

@@ -133,6 +133,8 @@ services:
         elasticsearch==8.11.0
         requests>=2.32.0
         boto3==1.34.0
+        structlog==23.2.0
+        geoip2==4.7.0
     volumes:
       - ../dags:/opt/airflow/dags
       - ../spark_jobs:/opt/airflow/spark_jobs  # ← ADD THIS
@@ -169,6 +171,8 @@ services:
         requests>=2.32.0
         boto3==1.34.0
         docker==6.1.0
+        structlog==23.2.0
+        geoip2==4.7.0
     volumes:
       - ../dags:/opt/airflow/dags
       - /var/run/docker.sock:/var/run/docker.sock  
